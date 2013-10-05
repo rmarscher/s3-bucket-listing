@@ -1,7 +1,10 @@
-if (typeof S3BL_IGNORE_PATH == 'undefined' || S3BL_IGNORE_PATH!=true) {
-  var S3BL_IGNORE_PATH = false;
-}
+// rmarscher fork requires handlebarsjs to render html
+// http://cdnjs.com/libraries/handlebars.js/
+
 jQuery(function($) {
+  if (typeof S3BL_IGNORE_PATH == 'undefined' || S3BL_IGNORE_PATH!=true) {
+    var S3BL_IGNORE_PATH = false;
+  }
   if (typeof BUCKET_URL != 'undefined') {
     var s3_rest_url = BUCKET_URL;
   } else {
@@ -10,38 +13,38 @@ jQuery(function($) {
 
   s3_rest_url += '?delimiter=/';
 
-  // handle pathes / prefixes - 2 options
-  //
-  // 1. Using the pathname
-  // {bucket}/{path} => prefix = {path}
-  // 
-  // 2. Using ?prefix={prefix}
-  //
-  // Why both? Because we want classic directory style listing in normal
-  // buckets but also allow deploying to non-buckets
-  //
-  // Can explicitly disable using path (useful if *not* deploying to an s3
-  // bucket) by setting
-  //
-  // S3BL_IGNORE_PATH = true
-  var rx = /.*[?&]prefix=([^&]+)(&.*)?$/;
-  var prefix = '';
-  if (S3BL_IGNORE_PATH==false) {
-    var prefix = location.pathname.replace(/^\//, '');
-  }
-  var match = location.search.match(rx);
-  if (match) {
-    prefix = match[1];
-  }
-  if (prefix) {
+    // handle pathes / prefixes - 2 options
+    //
+    // 1. Using the pathname
+    // {bucket}/{path} => prefix = {path}
+    // 
+    // 2. Using ?prefix={prefix}
+    //
+    // Why both? Because we want classic directory style listing in normal
+    // buckets but also allow deploying to non-buckets
+    //
+    // Can explicitly disable using path (useful if *not* deploying to an s3
+    // bucket) by setting
+    //
+    // S3BL_IGNORE_PATH = true
+    var rx = /.*[?&]prefix=([^&]+)(&.*)?$/;
+    var prefix = '';
+    if (S3BL_IGNORE_PATH==false) {
+      var prefix = location.pathname.replace(/^\//, '');
+    }
+    var match = location.search.match(rx);
+    if (match) {
+      prefix = match[1];
+    }
+    if (prefix) {
     // make sure we end in /
     var prefix = prefix.replace(/\/$/, '') + '/';
     s3_rest_url += '&prefix=' + prefix;
   }
 
-  // set loading notice
-  $('#listing').html('<h3>Loading <img src="http://assets.okfn.org/images/icons/ajaxload-circle.gif" /></h3>');
-  $.get(s3_rest_url)
+    // set loading notice
+    $('#listing').html('<h3>Loading <img src="http://assets.okfn.org/images/icons/ajaxload-circle.gif" /></h3>');
+    $.get(s3_rest_url)
     .done(function(data) {
       // clear loading notice
       $('#listing').html('');
@@ -71,68 +74,74 @@ jQuery(function($) {
       alert('There was an error');
       console.log(error);
     });
-});
 
-function renderTable(files, prefix) {
-  var cols = [ 45, 30, 15 ];
-  var content = [];
-  content.push(padRight('Last Modified', cols[1]) + '  ' + padRight('Size', cols[2]) + 'Key \n');
-  content.push(new Array(cols[0] + cols[1] + cols[2] + 4).join('-') + '\n');
-  
-  // add the ../ at the start of the directory listing
-  // and remove first item (which will be that directory)
-  if (prefix) {
-    files.shift();
-        
-    var up = prefix.replace(/\/$/, '').split('/').slice(0, -1).concat('').join('/'), // one directory up
-        item = { 
-          Key: up,
-          LastModified: '',
-          Size: '',
-          keyText: '../',
-          href: S3BL_IGNORE_PATH ? '?prefix=' + up : '../'
-        },
-        row = renderRow(item, cols);
-    content.push(row + '\n');
-  }
-  
-  $.each(files, function(idx, item) {
-    // strip off the prefix
-    item.keyText = item.Key.substring(prefix.length);
-    if (item.Type === 'directory') {
-      if (S3BL_IGNORE_PATH) {
-        item.href = location.protocol + '//' + location.hostname + location.pathname + '?prefix=' + item.Key;
-      } else {
-        item.href = item.keyText;
-      }
-    } else {
-      // TODO: need to fix this up for cases where we are on site not bucket
-      // in that case href for a file should point to s3 bucket
-      item.href = '/' + item.Key;
+  function renderTable(files, prefix) {
+    var cols = [ 45, 30, 15 ],
+    items = [],
+    source,
+    template;
+
+    // add the ../ at the start of the directory listing
+    // and remove first item (which will be that directory)
+    if (prefix) {
+      files.shift();
+
+      var up = prefix.replace(/\/$/, '').split('/').slice(0, -1).concat('').join('/'), // one directory up
+      item = { 
+        Key: up,
+        LastModified: '',
+        Size: '',
+        keyText: '../',
+        href: S3BL_IGNORE_PATH ? '?prefix=' + up : '../'
+      };
+      items.push(item);
     }
-    var row = renderRow(item, cols);
-    content.push(row + '\n');
-  });
+    
+    $.each(files, function(idx, item) {
+      // strip off the prefix
+      item.keyText = item.Key.substring(prefix.length);
+      if (item.Type === 'directory') {
+        if (S3BL_IGNORE_PATH) {
+          item.href = location.protocol + '//' + location.hostname + location.pathname + '?prefix=' + item.Key;
+        } else {
+          item.href = item.keyText;
+        }
+      } else {
+        // TODO: need to fix this up for cases where we are on site not bucket
+        // in that case href for a file should point to s3 bucket
+        item.href = '/' + item.Key;
+      }
+      items.push(item);
+    });
 
-  document.getElementById('listing').innerHTML = '<pre>' + content.join('') + '</pre>';
-}
-
-function renderRow(item, cols) {
-  var row = '';
-  row += padRight(item.LastModified, cols[1]) + '  ';
-  row += padRight(item.Size, cols[2]);
-  row += '<a href="' + item.href + '">' + item.keyText + '</a>';
-  return row;
-}
-
-function padRight(padString, length) {
-  var str = padString.slice(0, length-3);
-  if (padString.length > str.length) {
-    str += '...';
+    source   = $("#list-template").html();
+    template = Handlebars.compile(source);
+    $("#listing").html(template({
+        items: items
+    }));
   }
-  while (str.length < length) {
-    str = str + ' ';
+  
+  function renderRow(item, cols) {
+    var row = "<a href=\"" + item.href + "\" class=\"list-group-item\">\n" +
+    item.keyText
+    ""
+    
+    
+    row += padRight(item.LastModified, cols[1]) + '  ';
+    row += padRight(item.Size, cols[2]);
+    row += '<a href="' + item.href + '">' + item.keyText + '</a>';
+    return row;
   }
-  return str;
-}
-
+  
+  function padRight(padString, length) {
+    var str = padString.slice(0, length-3);
+    if (padString.length > str.length) {
+      str += '...';
+    }
+    while (str.length < length) {
+      str = str + ' ';
+    }
+    return str;
+  }
+    
+});
